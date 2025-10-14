@@ -192,19 +192,14 @@ plotAbundance <- function(data, GOI, dep_results, ref_group = "WT",
     }
   } else if (is(dep_results, "list")) {
     for (cond in other_conditions) {
-      # --- NEW ROBUST CHECKING LOGIC ---
-      # Check for both "Condition_vs_WT" and "WT_vs_Condition"
       res_name_fwd <- paste0(cond, "_vs_", ref_group)
       res_name_rev <- paste0(ref_group, "_vs_", cond)
-      
       res_name <- NULL
       if (res_name_fwd %in% names(dep_results)) {
         res_name <- res_name_fwd
       } else if (res_name_rev %in% names(dep_results)) {
         res_name <- res_name_rev
       }
-      # --- END OF NEW LOGIC ---
-      
       if (!is.null(res_name)) {
         res_obj <- dep_results[[res_name]]
         if (is(res_obj, "DESeqResults") && GOI %in% rownames(res_obj)) {
@@ -220,10 +215,18 @@ plotAbundance <- function(data, GOI, dep_results, ref_group = "WT",
   }
   annotation_df <- bind_rows(annotation_info)
   
+  # --- PLOTTING LOGIC UPDATED HERE ---
   p <- ggplot(plot_df, aes(x = condition, y = expression)) +
-    geom_boxplot(fill = plot_color, alpha = 0.6, color = NA, outlier.shape = NA) +
-    geom_boxplot(fill = NA, color = plot_color, outlier.shape = NA) +
-    geom_jitter(color = plot_color, size = 3.5, width = 0.1, alpha = 0.7) +
+    # Layer 1: Individual points
+    geom_jitter(color = plot_color, width = 0.2, size = 3, alpha = 0.7) +
+    
+    # Layer 2: Mean and Standard Deviation error bars
+    stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), 
+                 geom = "errorbar", width = 0.2, color = plot_color) + # Changed color
+    stat_summary(fun = mean, geom = "crossbar", width = 0.4, color = plot_color) + # Changed color
+    
+    # --- END OF PLOTTING LOGIC UPDATE ---
+    
     scale_x_discrete(drop = FALSE) +
     labs(title = GOI, subtitle = data_source_label, y = y_axis_label, x = NULL) +
     theme_bw(base_size = 16) +
@@ -308,9 +311,17 @@ ui <- fluidPage(
                     }
                     .navbar ~ .container-fluid:first-of-type { border-top: none; }
 
-                    /* --- CORRECTED CSS RULE TO FIX SIDEBAR COLOR --- */
+                    /* --- CSS RULE TO FIX SIDEBAR COLOR --- */
                     .bslib-sidebar-layout > aside {
                         background-color: #F8F5F0 !important;
+                    }
+
+                    /* --- NEW CSS RULES FOR ABOUT PAGE FONT SIZE --- */
+                    #about-section p {
+                        font-size: 16px !important; /* Increases paragraph font size */
+                    }
+                    #about-section h4 {
+                        font-size: 22px !important; /* Increases header font size */
                     }
 
                   "))
@@ -498,21 +509,31 @@ ui <- fluidPage(
                    )
                  )
         ),
-        
         tabPanel("About",
                  fluidPage(
+                   id = "about-section", 
                    titlePanel("About the Mamoth Application"),
                    hr(),
                    fluidRow(
                      column(8,
                             h4("General Information"),
-                            p("The Mamoth application is an interactive tool..."),
+                            p("The MAGEL2 Multi-Omics Targeting Hubs (MAMOTH) application is an interactive, open-access web portal developed to empower the research community and facilitate the exploration of this complex dataset. It provides complete and user-friendly access to the entire transcriptome, proteome, and ubiquitinome datasets presented in the study, enabling researchers to independently visualize findings, test novel hypotheses, and accelerate progress in understanding the molecular basis of MAGEL2-related neurodevelopmental disorders."),
+                            p("The data originates from a comprehensive multi-omics analysis of CRISPR/Cas9-engineered isogenic human pluripotent stem cell (hiPSC)-derived cortical neurons published in Buecking et al., 2026."),
+                            
                             h4("Background"),
-                            p("This project stems from research into MAGEL2..."),
+                            p("Variants in the gene MAGEL2 are associated with the severe neurodevelopmental disorders Prader-Willi Syndrome (PWS) and the more severe Schaaf-Yang Syndrome (SYS), yet the underlying molecular pathophysiology in the human brain remains poorly understood. Despite known links to processes like endosomal trafficking and protein ubiquitination, the specific role of MAGEL2 in human cortical neurons during critical developmental stages has been unclear."),
+                            p("This project addresses this gap by presenting the first integrative multi-omics analysis for MAGEL2-related disorders."),
+                            
                             h4("Feedback and Contact"),
-                            p("For inquiries, please contact the Laugsch Lab at Heidelberg University."),
+                            p("This application is under active development. We welcome any feedback, bug reports, or suggestions for new features. For inquiries, please contact the Laugsch Lab at Heidelberg University."),
                             p(HTML("<strong>Contact:</strong> <a href='mailto:jannis.buecking@gmail.com'>jannis.buecking@gmail.com</a>")),
-                            p(HTML("<strong>Lab Website:</strong> <a href='https://www.klinikum.uni-heidelberg.de/humangenetik/forschung/ag-laugsch' target='_blank'>Laugsch Lab</a>"))
+                            p(HTML("<strong>Lab Website:</strong> <a href='https://www.klinikum.uni-heidelberg.de/humangenetik/forschung/ag-laugsch' target='_blank'>Laugsch Lab</a>")),
+                            
+                            h4("Funding"),
+                            p("This project was funded by the Foundation for Prader-Willi Research (FPWR)."),
+                            
+                            h4("Credits"),
+                            p(HTML("Mammoth icon created by <a href='https://www.flaticon.com/free-icons/mammoth' title='mammoth icons'>Freepik - Flaticon</a>."))
                      )
                    )
                  )
@@ -530,7 +551,7 @@ server <- function(input, output, session) {
   USER <- reactiveValues(authenticated = FALSE)
   
   observeEvent(input$login_button, {
-    if (input$password == "SimoneBerkel") {
+    if (input$password == "Mammuthus_primigenius") {
       USER$authenticated <- TRUE
       shinyjs::hide("login_page")
       shinyjs::show("main_app")
