@@ -9,6 +9,7 @@ library(bslib)
 library(ggplot2)
 library(ggrepel)
 library(dplyr)
+library(tidyr)                
 library(stringr)
 library(forcats)
 library(patchwork)
@@ -267,7 +268,7 @@ ui <- fluidPage(
     id = "login_page",
     style = "width: 500px; max-width: 100%; margin: 0 auto; padding-top: 100px;",
     wellPanel(
-      h2("Mamoth Login", class = "text-center", style = "padding-top: 0;"),
+      h2("MAMOTH Login", class = "text-center", style = "padding-top: 0;"),
       p("Please enter the password to access the application.", class = "text-center"),
       passwordInput("password", "Password:"),
       div(
@@ -285,7 +286,7 @@ ui <- fluidPage(
       id = "main_app",
       # Your original navbarPage UI goes here. It is now wrapped in this hidden div.
       navbarPage(
-        title = div(img(src = mammoth_icon_url, height = "25px", style = "margin-top: -5px; padding-right: 10px;"), "Mamoth"),
+        title = div(img(src = mammoth_icon_url, height = "25px", style = "margin-top: -5px; padding-right: 10px;"), "MAMOTH"),
         theme = shinytheme("sandstone"),
         id = "main_nav",
         
@@ -293,7 +294,9 @@ ui <- fluidPage(
           tags$style(HTML("
                     body { color: #545252; }
                     .navbar-default {
-                      background-color: #F8F5F0 !important; border-color: transparent !important;
+                      background-color: #F8F5F0 !important; 
+                      /* This rule removes the navbar's own border */
+                      border: none !important; 
                     }
                     .navbar-default .navbar-brand, .navbar-default .navbar-nav > li > a {
                       color: #545252 !important; font-size: 16px !important;
@@ -309,19 +312,23 @@ ui <- fluidPage(
                     #nav_gene_viewer:hover, #nav_multi_omics:hover, #nav_mofa:hover, #nav_about:hover {
                       background-color: #E7E7E7 !important;
                     }
-                    .navbar ~ .container-fluid:first-of-type { border-top: none; }
 
-                    /* --- CSS RULE TO FIX SIDEBAR COLOR --- */
+                    /* --- THIS RULE REMOVES THE TOP BORDER OF THE PAGE CONTENT --- */
+                    .navbar + .container-fluid {
+                        border-top: none !important;
+                    }
+
+                    /* --- CSS RULE FOR bslib SIDEBARS (MOFA TABS) --- */
                     .bslib-sidebar-layout > aside {
                         background-color: #F8F5F0 !important;
                     }
-
-                    /* --- NEW CSS RULES FOR ABOUT PAGE FONT SIZE --- */
+                    
+                    /* --- CSS RULES FOR ABOUT PAGE FONT SIZE --- */
                     #about-section p {
-                        font-size: 16px !important; /* Increases paragraph font size */
+                        font-size: 16px !important; 
                     }
                     #about-section h4 {
-                        font-size: 22px !important; /* Increases header font size */
+                        font-size: 22px !important; 
                     }
 
                   "))
@@ -333,7 +340,7 @@ ui <- fluidPage(
                      column(12, align = "center", style = "padding-top: 50px;",
                             tags$h1(
                               img(src = mammoth_icon_url, height="68px", style = "vertical-align: -4px; margin-right: 20px;"),
-                              "Mamoth", 
+                              "MAMOTH", 
                               style = "font-size: 72px; font-weight: bold;"
                             ),
                             tags$h3("MAGEL2 Multi-Omics Targeting Hubs")
@@ -342,7 +349,7 @@ ui <- fluidPage(
                    hr(),
                    fluidRow(
                      column(10, offset = 1, align = "center",
-                            p("Welcome to the Mamoth interactive data portal. This application provides tools to explore multi-omics datasets (Transcriptome, Proteome, and Ubiquitome) related to MAGEL2 research. Use the navigation panels below or the tabs at the top to access the different viewers.", style = "font-size: 16px;")
+                            p("Welcome to the MAMOTH interactive data portal. This application provides tools to explore multi-omics datasets (transcriptome, proteome, and ubiquitome) related to MAGEL2 research. Use the navigation panels below or the tabs at the top to access the different viewers.", style = "font-size: 16px;")
                      )
                    ),
                    br(),
@@ -368,7 +375,7 @@ ui <- fluidPage(
                        checkboxInput("show_prot", "Show Proteome", value = TRUE),
                        checkboxInput("show_ubi", "Show Ubiquitome", value = TRUE),
                        hr(),
-                       helpText("Select a gene to view its expression. Use checkboxes to toggle data types.")
+                       helpText("Select a gene to view its expression. Use checkboxes to toggle data types. Significant stars refer to the adjusted p-value compared to WT")
                      ),
                      mainPanel(
                        width = 9,
@@ -384,45 +391,55 @@ ui <- fluidPage(
                  tabsetPanel(
                    type = "tabs",
                    tabPanel("Volcano Plot", 
-                            layout_sidebar(
-                              fillable = FALSE,
-                              sidebar = sidebar(
-                                width = 300,
-                                collapsible = TRUE,
-                                h4("Controls"),
-                                selectInput("volcano_group1", "Select Group 1:", choices = NULL),
-                                selectInput("volcano_group2", "Select Group 2 (Contrast):", choices = NULL),
-                                hr(),
-                                checkboxGroupInput("volcano_omics", "Select Omics Layers:", choices = c("Transcriptome", "Proteome", "Ubiquitome"), selected = c("Transcriptome", "Proteome", "Ubiquitome")),
-                                hr(),
-                                helpText("Significant hits (p.adj < 0.05 and |LFC| > 1) are colored red."),
-                                hr(),
-                                downloadButton("download_volcano_results", "Download Volcano Results (.xlsx)")
-                              ),
-                              conditionalPanel("input.volcano_omics.includes('Transcriptome')", fluidRow(column(6, plotOutput("volcano_rna_8330")), column(6, plotOutput("volcano_rna_MGH")))),
-                              conditionalPanel("input.volcano_omics.includes('Proteome')", fluidRow(column(6, plotOutput("volcano_prot_8330")), column(6, plotOutput("volcano_prot_MGH")))),
-                              conditionalPanel("input.volcano_omics.includes('Ubiquitome')", fluidRow(column(6, plotOutput("volcano_ubi_8330")), column(6, plotOutput("volcano_ubi_MGH"))))
+                            fluidPage(
+                              br(),
+                              # --- Reverted to classic sidebarLayout ---
+                              sidebarLayout(
+                                sidebarPanel(
+                                  width = 3,
+                                  h4("Controls"),
+                                  selectInput("volcano_group1", "Select Group 1:", choices = NULL),
+                                  selectInput("volcano_group2", "Select Group 2 (Contrast):", choices = NULL),
+                                  hr(),
+                                  checkboxGroupInput("volcano_omics", "Select Omics Layers:", choices = c("Transcriptome", "Proteome", "Ubiquitome"), selected = c("Transcriptome", "Proteome", "Ubiquitome")),
+                                  hr(),
+                                  helpText("Significant hits (p.adj < 0.05 and |LFC| > 1) are colored red."),
+                                  hr(),
+                                  downloadButton("download_volcano_results", "Download Volcano Results (.xlsx)")
+                                ),
+                                mainPanel(
+                                  width = 9,
+                                  conditionalPanel("input.volcano_omics.includes('Transcriptome')", fluidRow(column(6, plotOutput("volcano_rna_8330")), column(6, plotOutput("volcano_rna_MGH")))),
+                                  conditionalPanel("input.volcano_omics.includes('Proteome')", fluidRow(column(6, plotOutput("volcano_prot_8330")), column(6, plotOutput("volcano_prot_MGH")))),
+                                  conditionalPanel("input.volcano_omics.includes('Ubiquitome')", fluidRow(column(6, plotOutput("volcano_ubi_8330")), column(6, plotOutput("volcano_ubi_MGH"))))
+                                )
+                              )
                             )
                    ),
                    tabPanel("Gene Ontology Enrichment",
-                            layout_sidebar(
-                              fillable = FALSE,
-                              sidebar = sidebar(
-                                width = 300,
-                                collapsible = TRUE,
-                                h4("Analysis Controls"),
-                                selectInput("go_omics_type", "Select Omics Layer:", choices = c("Transcriptome", "Proteome", "Ubiquitome")),
-                                selectInput("go_ontology", "Select GO Ontology:", choices = c("Biological Process" = "BP", "Cellular Component" = "CC", "Molecular Function" = "MF")),
-                                selectInput("go_group1", "Select Group 1:", choices = NULL),
-                                selectInput("go_group2", "Select Group 2 (Contrast):", choices = NULL),
-                                sliderInput("go_n_terms", "Number of Top Terms to Display:", min = 3, max = 20, value = 10, step = 1),
-                                actionButton("go_run_analysis", "Run Analysis", icon = icon("rocket"), class = "btn-primary"),
-                                hr(),
-                                helpText("This tool finds genes significantly changed in both backgrounds and performs GO enrichment."),
-                                hr(),
-                                downloadButton("download_go_results", "Download GO Results (.xlsx)")
-                              ),
-                              plotOutput("go_plot", height = "700px")
+                            fluidPage(
+                              br(),
+                              # --- Reverted to classic sidebarLayout ---
+                              sidebarLayout(
+                                sidebarPanel(
+                                  width = 3,
+                                  h4("Analysis Controls"),
+                                  selectInput("go_omics_type", "Select Omics Layer:", choices = c("Transcriptome", "Proteome", "Ubiquitome")),
+                                  selectInput("go_ontology", "Select GO Ontology:", choices = c("Biological Process" = "BP", "Cellular Component" = "CC", "Molecular Function" = "MF")),
+                                  selectInput("go_group1", "Select Group 1:", choices = NULL),
+                                  selectInput("go_group2", "Select Group 2 (Contrast):", choices = NULL),
+                                  sliderInput("go_n_terms", "Number of Top Terms to Display:", min = 3, max = 20, value = 10, step = 1),
+                                  actionButton("go_run_analysis", "Run Analysis", icon = icon("rocket"), class = "btn-primary"),
+                                  hr(),
+                                  helpText("This tool finds genes significantly changed in both backgrounds and performs GO enrichment."),
+                                  hr(),
+                                  downloadButton("download_go_results", "Download GO Results (.xlsx)")
+                                ),
+                                mainPanel(
+                                  width = 9,
+                                  plotOutput("go_plot", height = "700px")
+                                )
+                              )
                             )
                    )
                  )
@@ -433,92 +450,109 @@ ui <- fluidPage(
                    type = "tabs",
                    tabPanel("Overview",
                             fluidPage(
-                              titlePanel("Model Overview"),
+                              titlePanel("Overview of trained Multi-Omics Factor Analysis (MOFA) Model"),
                               h3("Factor Overview"),
                               plotOutput("overview_factor_plot", height="800px"),
                               hr(),
-                              h3("Total Variance Explained by Mutation Type"),
+                              h3("Total Variance Explained"),
                               plotOutput("plot_variance_group_total")
                             )
                    ),
                    tabPanel("Factor Exploration",
-                            sidebarLayout(
-                              sidebarPanel(
-                                h4("Factor Plot Options"),
-                                checkboxGroupInput("factors_to_plot", "Select Factors to Plot:", choices = 1:N_FACTORS, selected = 1:5, inline = TRUE),
-                                selectInput("factors_color_by", "Color Samples By:", choices = c("Background", "Mutation"), selected = "Background"),
-                                helpText("Select at least two factors to generate plots.")
-                              ),
-                              mainPanel(
-                                h3("Factor Scatter Plot Matrix"),
-                                plotOutput("factor_plot_matrix", height = "600px"),
-                                hr(),
-                                h3("Factor Correlations"),
-                                plotOutput("factor_correlation_heatmap")
+                            fluidPage(
+                              br(), # Added for spacing
+                              sidebarLayout(
+                                sidebarPanel(
+                                  h4("Factor Plot Options"),
+                                  checkboxGroupInput("factors_to_plot", "Select Factors to Plot:", choices = 1:N_FACTORS, selected = 1:5, inline = TRUE),
+                                  selectInput("factors_color_by", "Color Samples By:", choices = c("Background", "Mutation"), selected = "Background"),
+                                  helpText("Select at least two factors to generate plots.")
+                                ),
+                                mainPanel(
+                                  h3("Factor Scatter Plot Matrix"),
+                                  plotOutput("factor_plot_matrix", height = "600px"),
+                                  hr(),
+                                  h3("Factor Correlations"),
+                                  plotOutput("factor_correlation_heatmap")
+                                )
                               )
                             )
                    ),
                    tabPanel("Feature Weights",
-                            sidebarLayout(
-                              sidebarPanel(h4("Weight Plot Options"), selectInput("weights_view", "Select Omics View:", choices = view_choices), selectInput("weights_factor", "Select Factor:", choices = 1:N_FACTORS, selected = 1), sliderInput("weights_nfeatures", "Number of Top Features:", min = 5, max = 50, value = 10, step = 1), checkboxInput("weights_scale", "Scale Weights (-1 to 1)", value = TRUE)),
-                              mainPanel(h3("Top Feature Weights"), uiOutput("plot_top_weights_selected_ui"))
+                            fluidPage(
+                              br(), # Added for spacing
+                              sidebarLayout(
+                                sidebarPanel(h4("Weight Plot Options"), selectInput("weights_view", "Select Omics View:", choices = view_choices), selectInput("weights_factor", "Select Factor:", choices = 1:N_FACTORS, selected = 1), sliderInput("weights_nfeatures", "Number of Top Features:", min = 5, max = 250, value = 10, step = 1)),
+                                mainPanel(h3("Top Feature Weights"), uiOutput("plot_top_weights_selected_ui"))
+                              )
                             )
                    ),
                    tabPanel("Data Heatmaps",
-                            layout_sidebar(
-                              fillable = FALSE,
-                              sidebar = sidebar(
-                                collapsible = TRUE,
-                                width = 300,
-                                h4("Heatmap Options"),
-                                selectInput("heatmap_view", "Select Omics View:", choices = view_choices),
-                                selectInput("heatmap_factor", "Select Factor:", choices = 1:N_FACTORS, selected = 1),
-                                sliderInput("heatmap_nfeatures", "Number of Top Features:", min = 10, max = 100, value = 25, step = 5),
-                                checkboxInput("heatmap_cluster_rows", "Cluster Rows (Features)", value = TRUE),
-                                checkboxInput("heatmap_cluster_cols", "Cluster Columns (Samples)", value = TRUE),
-                                checkboxInput("heatmap_show_rownames", "Show Feature Names", value = TRUE),
-                                checkboxInput("heatmap_show_colnames", "Show Sample Names", value = TRUE),
-                                selectInput("heatmap_scale", "Scale Data:", choices = c("Row" = "row", "Column" = "column", "None" = "none"), selected = "row")
-                              ),
-                              h3("Heatmap of Top Features for Selected Factor"), 
-                              uiOutput("plot_data_heatmap_selected_ui")
+                            fluidPage(
+                              br(), # Added for spacing
+                              # --- Reverted to classic sidebarLayout ---
+                              sidebarLayout(
+                                sidebarPanel(
+                                  width = 3,
+                                  h4("Heatmap Options"),
+                                  selectInput("heatmap_view", "Select Omics View:", choices = view_choices),
+                                  selectInput("heatmap_factor", "Select Factor:", choices = 1:N_FACTORS, selected = 1),
+                                  sliderInput("heatmap_nfeatures", "Number of Top Features:", min = 10, max = 100, value = 25, step = 5),
+                                  checkboxInput("heatmap_cluster_rows", "Cluster Rows (Features)", value = TRUE),
+                                  checkboxInput("heatmap_cluster_cols", "Cluster Columns (Samples)", value = TRUE),
+                                  checkboxInput("heatmap_show_rownames", "Show Feature Names", value = TRUE),
+                                  checkboxInput("heatmap_show_colnames", "Show Sample Names", value = TRUE),
+                                  selectInput("heatmap_scale", "Scale Data:", choices = c("Row" = "row", "Column" = "column", "None" = "none"), selected = "row")
+                                ),
+                                mainPanel(
+                                  width = 9,
+                                  h3("Heatmap of Top Features for Selected Factor"), 
+                                  uiOutput("plot_data_heatmap_selected_ui")
+                                )
+                              )
                             )
                    ),
                    tabPanel("GSEA Enrichment",
-                            layout_sidebar(
-                              fillable = FALSE,
-                              sidebar = sidebar(
-                                collapsible = TRUE,
-                                width = 300,
-                                h4("GSEA Options (Live Analysis)"),
-                                selectInput("gsea_view", "Select Omics View:", choices = gsea_view_choices),
-                                selectInput("gsea_factor", "Select Factor:", choices = 1:N_FACTORS, selected = 1),
-                                selectInput("gsea_database", "Select Gene Set Database:",
-                                            choices = c("Reactome" = "REAC", "Gene Ontology (BP)" = "GO:BP", "Gene Ontology (MF)" = "GO:MF", "Gene Ontology (CC)" = "GO:CC", "Human Phenotype Ontology" = "HP", "MicroRNAs (miRTarBase)" = "MIRNA", "Transcription Factors (TRANSFAC)" = "TF"),
-                                            selected = "REAC"),
-                                sliderInput("gsea_n_pathways", "Number of Top Pathways:", min = 5, max = 30, value = 15, step = 1),
-                                hr(),
-                                actionButton("run_gsea", "Run Analysis", icon = icon("rocket")),
-                                helpText("Click 'Run Analysis' to fetch results from g:Profiler. This may take a moment."),
-                                hr(),
-                                downloadButton("download_gsea_results", "Download GSEA Results (.xlsx)")
-                              ),
-                              h3("Live GSEA Results using g:Profiler"),
-                              plotOutput("gsea_combined_plot", height = "600px")
+                            fluidPage(
+                              br(), # Added for spacing
+                              # --- Reverted to classic sidebarLayout ---
+                              sidebarLayout(
+                                sidebarPanel(
+                                  width = 3,
+                                  h4("GSEA Options (Live Analysis)"),
+                                  selectInput("gsea_view", "Select Omics View:", choices = gsea_view_choices),
+                                  selectInput("gsea_factor", "Select Factor:", choices = 1:N_FACTORS, selected = 1),
+                                  selectInput("gsea_database", "Select Gene Set Database:",
+                                              choices = c("Reactome" = "REAC", "Gene Ontology (BP)" = "GO:BP", "Gene Ontology (MF)" = "GO:MF", "Gene Ontology (CC)" = "GO:CC", "Human Phenotype Ontology" = "HP", "MicroRNAs (miRTarBase)" = "MIRNA", "Transcription Factors (TRANSFAC)" = "TF"),
+                                              selected = "REAC"),
+                                  sliderInput("gsea_n_pathways", "Number of Top Pathways:", min = 5, max = 30, value = 15, step = 1),
+                                  hr(),
+                                  actionButton("run_gsea", "Run Analysis", icon = icon("rocket")),
+                                  helpText("Click 'Run Analysis' to fetch results from g:Profiler. This may take a moment."),
+                                  hr(),
+                                  downloadButton("download_gsea_results", "Download GSEA Results (.xlsx)")
+                                ),
+                                mainPanel(
+                                  width = 9,
+                                  h3("Live Gene Set Enrichment Analysis (GSEA) using g:Profiler"),
+                                  plotOutput("gsea_combined_plot", height = "600px")
+                                )
+                              )
                             )
                    )
                  )
         ),
+        
         tabPanel("About",
                  fluidPage(
                    id = "about-section", 
-                   titlePanel("About the Mamoth Application"),
+                   titlePanel("About the MAMOTH Application"),
                    hr(),
                    fluidRow(
                      column(8,
                             h4("General Information"),
                             p("The MAGEL2 Multi-Omics Targeting Hubs (MAMOTH) application is an interactive, open-access web portal developed to empower the research community and facilitate the exploration of this complex dataset. It provides complete and user-friendly access to the entire transcriptome, proteome, and ubiquitinome datasets presented in the study, enabling researchers to independently visualize findings, test novel hypotheses, and accelerate progress in understanding the molecular basis of MAGEL2-related neurodevelopmental disorders."),
-                            p("The data originates from a comprehensive multi-omics analysis of CRISPR/Cas9-engineered isogenic human pluripotent stem cell (hiPSC)-derived cortical neurons published in Buecking et al., 2026."),
+                            p("The data originates from a comprehensive multi-omics analysis of CRISPR/Cas9-engineered isogenic human pluripotent stem cell (hiPSC)-derived cortical neurons published in in Buecking et al., 2025 preprint."),
                             
                             h4("Background"),
                             p("Variants in the gene MAGEL2 are associated with the severe neurodevelopmental disorders Prader-Willi Syndrome (PWS) and the more severe Schaaf-Yang Syndrome (SYS), yet the underlying molecular pathophysiology in the human brain remains poorly understood. Despite known links to processes like endosomal trafficking and protein ubiquitination, the specific role of MAGEL2 in human cortical neurons during critical developmental stages has been unclear."),
@@ -616,15 +650,26 @@ server <- function(input, output, session) {
     validate(need(is.data.frame(results_df) && nrow(results_df) > 0, "Comparison not available."))
     validate(need(all(c("name", "logFC", "p_adj") %in% names(results_df)), "Results missing required columns."))
     df <- results_df %>% filter(!is.na(p_adj) & !is.na(logFC)) %>% mutate(significant = ifelse(p_adj < 0.05 & abs(logFC) > 1, "Yes", "No"), label = ifelse(rank(-abs(logFC)) <= 10, name, ""))
+    
     ggplot(df, aes(x = logFC, y = -log10(p_adj))) +
       geom_point(aes(color = significant), alpha = 0.6, size = 1.5) +
       geom_text_repel(aes(label = label), max.overlaps = 15, size = 3.5, box.padding = 0.5, color = "#545252") +
-      scale_color_manual(values = c("Yes" = "firebrick", "No" = "grey50"), name = "Significant (p.adj < 0.05 & |LFC| > 1)") +
+      
+      # --- CHANGE IS HERE ---
+      # The legend is removed by setting guide = "none"
+      scale_color_manual(values = c("Yes" = "firebrick", "No" = "grey50"), guide = "none") +
+      
       geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "black") +
       geom_vline(xintercept = c(-1, 1), linetype = "dashed", color = "black") +
-      labs(title = plot_title, x = bquote("Log"[2]*" Fold Change"), y = bquote(-log[10]~'(Adjusted P-value)')) +
+      labs(title = plot_title, x = bquote("Log"[2]*" Fold Change"), y = bquote(-log[10]~'(p.adj)')) +
       theme_bw(base_size = 14) +
-      theme(legend.position = "bottom", plot.title = element_text(hjust = 0.5, face = "bold"), text = element_text(color = "#545252"), panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+      theme(
+        legend.position = "bottom", 
+        plot.title = element_text(hjust = 0.5, face = "bold"), 
+        text = element_text(color = "#545252"), 
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank()
+      )
   }
   volcano_data <- reactive({
     req(input$volcano_group1, input$volcano_group2, data_loaded_flag)
@@ -798,15 +843,24 @@ server <- function(input, output, session) {
     # Build the single combined plot
     ggplot(plot_df, aes(x = factor, y = value, color = Mutation, shape = Background)) +
       geom_vline(xintercept = 1:14 + 0.5, linetype = "dashed", color = "grey70") +
-      geom_point(position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.8), size = 3, alpha = 0.8) +
-      scale_shape_manual(name = "Background", values = c("8330" = 16, "MGH" = 15)) +
-      scale_color_discrete(name = "Genotype") + # Ensure legend title is correct
-      labs(x = "Factor", y = "Factor Value") +
+      
+      # 1. Increased point size from 3 to 4
+      geom_point(position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.8), size = 8, alpha = 0.8) +
+      
+      # 2. Changed shape values
+      #    16 = circle, 17 = triangle pointing up. 
+      #    Note: There is no default "triangle pointing down" symbol. 
+      #    If you need a downward triangle, you would use shape = 6 (hollow) or shape = 25 (filled with border). 
+      #    I will use 17 (up) and 16 (circle) as they are the standard solid equivalents.
+      scale_shape_manual(name = "Background", values = c("8330" = 17, "MGH" = 16)) +
+      
+      scale_color_discrete(name = "Genotype") + 
+      labs(x = "", y = "Factor Value") +
       theme_bw() +
       theme(
         panel.grid.minor = element_blank(),
         panel.grid.major.x = element_blank(),
-        text = element_text(size = 14, color = "#545252"),
+        text = element_text(size = 18, color = "#545252"),
         axis.text = element_text(color = "#545252"),
         legend.position = "top"
       )
@@ -818,32 +872,126 @@ server <- function(input, output, session) {
     tryCatch({
       plot_data <- plot_variance_explained(mofa_tmp, x = "group", plot_total = TRUE)[[2]]$data
       plot_data <- plot_data %>% mutate(Background = str_extract(group, "(8330|MGH)$"), view = factor(view, levels = c("RNA", "protein", "Ubiq")))
-      bg_colors <- gg_color_hue(2); names(bg_colors) <- c("8330", "MGH")
+      bg_colors <- c("8330" = "grey40", "MGH" = "grey80") 
+      
       ggplot(plot_data, aes(x = group, y = R2, fill = Background)) +
-        geom_bar(stat = "identity", color = "black", size = 0.3) +
+        geom_bar(stat = "identity", color = NA) + 
         facet_wrap(~view, labeller = labeller(view = view_labeller)) +
-        base_gg_theme + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14), panel.grid = element_blank(), legend.position = "top") +
-        labs(x = NULL, y = "Total variance explained (%)") + scale_fill_manual(name = "Background", values = bg_colors)
+        base_gg_theme + 
+        theme(
+          axis.text.x = element_text(angle = 45, hjust = 1, size = 16), 
+          axis.text.y = element_text(hjust = 1, size = 16), 
+          panel.grid = element_blank(), 
+          legend.position = "none",
+          # Added text color to the facet titles
+          strip.text = element_text(size = 16, face = "bold", color = "#545252") 
+        ) +
+        labs(x = NULL, y = "Total variance explained (%)") +
+        scale_fill_manual(name = "Background", values = bg_colors)
     }, error = function(e) { ggplot() + labs(title = "Error generating total variance plot", subtitle = e$message) + theme_void() })
   })
   
   output$factor_plot_matrix <- renderPlot({ 
-    req(mofa_data_loaded, input$factors_to_plot, input$factors_color_by); factors_to_plot <- as.numeric(input$factors_to_plot); color_by_col <- input$factors_color_by
+    req(mofa_data_loaded, input$factors_to_plot, input$factors_color_by)
+    factors_to_plot <- as.numeric(input$factors_to_plot)
+    color_by_col <- input$factors_color_by
+    
     validate(need(length(factors_to_plot) >= 2, "Please select at least two factors."))
-    factors_df <- get_factors(MOFA_out, factors = factors_to_plot, as.data.frame = TRUE) %>% tidyr::pivot_wider(id_cols = "sample", names_from = "factor", values_from = "value")
-    metadata_df <- MOFA_out@samples_metadata %>% tibble::rownames_to_column("sample_rn") %>% dplyr::select(sample, !!sym(color_by_col))
+    
+    factors_df <- get_factors(MOFA_out, factors = factors_to_plot, as.data.frame = TRUE) %>%
+      tidyr::pivot_wider(id_cols = "sample", names_from = "factor", values_from = "value")
+    
+    metadata_df <- MOFA_out@samples_metadata %>%
+      tibble::rownames_to_column("sample_rn") %>%
+      dplyr::select(sample, !!sym(color_by_col))
+    
     plot_df <- dplyr::left_join(factors_df, metadata_df, by = "sample")
-    p <- GGally::ggpairs(plot_df, columns = paste0("Factor", factors_to_plot), mapping = aes(color = .data[[color_by_col]]), upper = list(continuous = wrap("cor", size = 5)), lower = list(continuous = wrap("points", size = 4, alpha = 0.6)), diag = list(continuous = custom_density))
-    p <- p + theme_bw(base_size = 14) + theme(text = element_text(colour = font_color_dark), strip.text = element_text(size = 14, colour = font_color_dark), axis.title = element_text(size = 16, colour = font_color_dark), axis.text = element_text(size = 12, colour = font_color_dark), legend.title = element_text(size = 14, colour = font_color_dark), legend.text = element_text(size = 12, colour = font_color_dark), panel.grid = element_blank())
+    
+    p <- GGally::ggpairs(
+      plot_df,
+      columns = paste0("Factor", factors_to_plot),
+      mapping = aes(color = .data[[color_by_col]]),
+      
+      # --- CHANGE IS HERE ---
+      # Kept the default 'cor' function which respects color, 
+      # but set the text 'size' to 3 to prevent overlap.
+      upper = list(continuous = wrap("cor", size = 3)), 
+      
+      lower = list(continuous = wrap("points", size = 4, alpha = 0.6)),
+      diag = list(continuous = custom_density)
+    )
+    
+    # This logic correctly applies your grey colors only when "Background" is selected
+    if (color_by_col == "Background") {
+      p <- p + scale_color_manual(values = c("8330" = "grey40", "MGH" = "grey80")) +
+        scale_fill_manual(values = c("8330" = "grey40", "MGH" = "grey80"))
+    }
+    
+    p <- p + theme_bw(base_size = 14) +
+      theme(
+        text = element_text(colour = font_color_dark),
+        strip.text = element_text(size = 14, colour = font_color_dark),
+        axis.title = element_text(size = 16, colour = font_color_dark),
+        axis.text = element_text(size = 12, colour = font_color_dark),
+        legend.title = element_text(size = 14, colour = font_color_dark),
+        legend.text = element_text(size = 12, colour = font_color_dark),
+        panel.grid = element_blank()
+      )
+    
     print(p)
   })
   
   output$factor_correlation_heatmap <- renderPlot({ 
-    req(mofa_data_loaded, input$factors_to_plot); selected_factors <- as.numeric(input$factors_to_plot)
+    req(mofa_data_loaded, input$factors_to_plot)
+    selected_factors <- as.numeric(input$factors_to_plot)
     validate(need(length(selected_factors) >= 2, "Please select at least two factors."))
-    all_factors_list <- get_factors(MOFA_out, factors = "all"); all_factors_matrix <- do.call(rbind, all_factors_list)
-    full_cor_matrix <- cor(all_factors_matrix); cor_matrix_subset <- full_cor_matrix[selected_factors, selected_factors, drop = FALSE]
-    pheatmap(cor_matrix_subset, color = heatmap_colors, border_color = NA)
+    
+    # --- Get Correlation Matrix ---
+    all_factors_list <- get_factors(MOFA_out, factors = "all")
+    all_factors_matrix <- do.call(rbind, all_factors_list)
+    full_cor_matrix <- cor(all_factors_matrix)
+    cor_matrix_subset <- full_cor_matrix[selected_factors, selected_factors, drop = FALSE]
+    
+    # --- Melt matrix for ggplot2 ---
+    plot_data <- as.data.frame(cor_matrix_subset) %>%
+      # Use a unique temporary name for the new column
+      rownames_to_column("Temp_Factor_Row") %>% 
+      pivot_longer(
+        cols = -Temp_Factor_Row, # Pivot everything except our new row name column
+        names_to = "Factor2", 
+        values_to = "Correlation"
+      ) %>%
+      # Rename the temporary column to its final name
+      rename(Factor1 = Temp_Factor_Row) %>%
+      mutate(
+        Factor1 = factor(Factor1, levels = rownames(cor_matrix_subset)),
+        Factor2 = factor(Factor2, levels = colnames(cor_matrix_subset))
+      )
+    
+    # --- Create ggplot2 Heatmap ---
+    ggplot(plot_data, aes(x = Factor1, y = Factor2, fill = Correlation)) +
+      geom_tile(color = "white") + 
+      scale_fill_gradientn(
+        colors = heatmap_colors, 
+        limits = c(-1, 1), 
+        name = "Correlation"
+      ) +
+      geom_text(
+        aes(label = round(Correlation, 2)), 
+        color = "#545252", 
+        size = 5
+      ) +
+      coord_fixed() +
+      labs(x = NULL, y = NULL) +
+      theme_minimal(base_size = 18) +
+      theme(
+        text = element_text(color = "#545252"),
+        axis.text = element_text(color = "#545252"),
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        legend.title = element_text(color = "#545252"),
+        legend.text = element_text(color = "#545252"),
+        panel.grid = element_blank() 
+      )
   })
   
   output$plot_top_weights_selected_ui <- renderUI({ req(input$weights_nfeatures); plotOutput("plot_top_weights_selected", height = paste0(350 + (input$weights_nfeatures * 20), "px")) })
@@ -896,16 +1044,31 @@ server <- function(input, output, session) {
     TOP_N_TERMS_PLOT <- input$gsea_n_pathways; TARGET_FACTOR <- as.numeric(input$gsea_factor); SOURCE_GENESET <- input$gsea_database; view_display_name <- names(gsea_view_choices)[gsea_view_choices == input$gsea_view]
     validate(need(!is.null(results), "Click 'Run Analysis' to generate GSEA results."))
     all_results_df <- bind_rows(results$positive, results$negative); global_plot_limit <- if (nrow(all_results_df) > 0) ceiling(max(-log10(all_results_df$p_value), na.rm=TRUE)) else 10
+    
     create_gsea_plot_internal <- function(results_df, weight_sign) {
       if (is.null(results_df) || nrow(results_df) == 0) { return(ggplot() + labs(title = paste(weight_sign, "Weights Enrichment"), subtitle = "No significant terms found") + theme_void() + theme(plot.title = element_text(hjust=0.5), plot.subtitle = element_text(hjust=0.5))) }
       plot_data <- results_df %>% mutate(NegLog10FDR = -log10(p_value)) %>% slice_max(order_by = NegLog10FDR, n = TOP_N_TERMS_PLOT) %>% mutate(term_name_ordered = fct_reorder(str_wrap(term_name, 50), NegLog10FDR))
       color_palette <- if (weight_sign == "Positive") "Blues" else "Reds"
+      
       p <- ggplot(plot_data, aes(x = term_name_ordered, y = NegLog10FDR, fill = NegLog10FDR)) +
         geom_bar(stat = "identity") + coord_flip() + scale_fill_distiller(palette = color_palette, direction = 1, limits = c(0, global_plot_limit)) + scale_y_continuous(limits = c(0, global_plot_limit), expand = c(0, 0.1)) +
-        labs(title = paste(weight_sign, "Weights Enrichment"), subtitle = paste("Factor", TARGET_FACTOR, "|", names(which(c("Reactome" = "REAC", "GO (BP)" = "GO:BP", "GO (MF)" = "GO:MF", "GO (CC)" = "GO:CC", "HPO" = "HP", "miRNA" = "MIRNA", "TF" = "TF") == SOURCE_GENESET))), x = NULL, y = expression(-log10("FDR"))) +
-        base_gg_theme + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.title = element_text(hjust = 0.5, face = "bold"), plot.subtitle = element_text(hjust = 0.5))
+        labs(
+          title = paste(weight_sign, "Weights Enrichment"),
+          subtitle = paste("Factor", TARGET_FACTOR, "|", names(which(c("Reactome" = "REAC", "GO (BP)" = "GO:BP", "GO (MF)" = "GO:MF", "GO (CC)" = "GO:CC", "HPO" = "HP", "miRNA" = "MIRNA", "TF" = "TF") == SOURCE_GENESET))),
+          x = NULL,
+          y = expression(-log10(p.adj)) # *** LABEL UPDATED HERE ***
+        ) +
+        base_gg_theme + 
+        theme(
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.title = element_text(hjust = 0.5, face = "bold"),
+          plot.subtitle = element_text(hjust = 0.5),
+          legend.position = "none" # *** LEGEND REMOVED HERE ***
+        )
       p
     }
+    
     p_pos <- create_gsea_plot_internal(results$positive, "Positive"); p_neg <- create_gsea_plot_internal(results$negative, "Negative")
     title <- ggdraw() + draw_label(paste(view_display_name, "View - GSEA Results"), fontface = 'bold', x = 0.5, hjust = 0.5, size = 16, colour = font_color_dark)
     combined_plots <- plot_grid(p_pos, p_neg, ncol = 2, align = 'v')
