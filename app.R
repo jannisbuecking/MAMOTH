@@ -6,11 +6,14 @@ library(openxlsx)
 library(shinythemes)
 library(DESeq2)
 library(bslib)                
+library(msigdbr)              # Add this line
 library(ggplot2)
 library(ggrepel)
 library(dplyr)
 library(tidyr)                
 library(stringr)
+library(shinycssloaders)
+library(Hmisc)
 library(forcats)
 library(patchwork)
 library(SummarizedExperiment)
@@ -141,7 +144,7 @@ VIEWS <- if(exists("MOFA_out")) tryCatch(views_names(MOFA_out), error = function
 view_choices <- setNames(VIEWS, case_when(VIEWS == "RNA" ~ "Transcriptome", VIEWS == "protein" ~ "Proteome", VIEWS == "Ubiq" ~ "Ubiquitome", TRUE ~ VIEWS))
 gsea_view_choices <- c("Transcriptome" = "RNA", "Proteome" = "protein", "Ubiquitome" = "Ubiq")
 heatmap_colors <- colorRampPalette(rev(brewer.pal(n = 10, name = "RdBu")))(100)
-font_color_dark <- "grey20"
+font_color_dark <- "#545252"
 view_labeller <- c(`protein` = "Proteome", `RNA` = "Transcriptome", `Ubiq` = "Ubiquitome")
 
 # General Helper Functions
@@ -155,7 +158,10 @@ plotAbundance <- function(data, GOI, dep_results, ref_group = "WT",
                           star_vjust = -0.5, star_size = 6) {
   
   if (!GOI %in% rownames(data)) {
-    return(ggplot() + theme_void() + annotate("text", x=0.5, y=0.5, label="Gene not found\nin this dataset") + ggtitle(GOI) + labs(subtitle=data_source_label))
+    return(ggplot() + theme_void() + 
+             annotate("text", x=0.5, y=0.5, label="Gene not found\nin this dataset", size = 6, color = "#545252") + 
+             ggtitle(GOI) + labs(subtitle=NULL) +
+             theme(plot.title = element_text(hjust = 0.5, color = "#545252"))) # Add theme here too
   }
   
   if (inherits(data, "DESeqDataSet")) {
@@ -216,35 +222,40 @@ plotAbundance <- function(data, GOI, dep_results, ref_group = "WT",
   }
   annotation_df <- bind_rows(annotation_info)
   
-  # --- PLOTTING LOGIC UPDATED HERE ---
   p <- ggplot(plot_df, aes(x = condition, y = expression)) +
-    # Layer 1: Individual points
     geom_jitter(color = plot_color, width = 0.2, size = 3, alpha = 0.7) +
-    
-    # Layer 2: Mean and Standard Deviation error bars
     stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), 
-                 geom = "errorbar", width = 0.2, color = plot_color) + # Changed color
-    stat_summary(fun = mean, geom = "crossbar", width = 0.4, color = plot_color) + # Changed color
-    
-    # --- END OF PLOTTING LOGIC UPDATE ---
-    
+                 geom = "errorbar", width = 0.2, color = plot_color) +
+    stat_summary(fun = mean, geom = "crossbar", width = 0.4, color = plot_color) +
     scale_x_discrete(drop = FALSE) +
-    labs(title = GOI, subtitle = data_source_label, y = y_axis_label, x = NULL) +
+    
+    # --- LABS UPDATED ---
+    labs(title = GOI, subtitle = NULL, y = y_axis_label, x = NULL) + # Subtitle removed
+    
     theme_bw(base_size = 16) +
+    
+    # --- THEME UPDATED ---
     theme(
-      text = element_text(color = "#545252"), axis.text = element_text(color = "#545252"),
-      axis.ticks = element_line(color = "#545252"), axis.title.y = element_text(size = 12),
+      text = element_text(color = "#545252"), 
+      axis.text = element_text(color = "#545252"),
+      axis.ticks = element_line(color = "#545252"), 
+      axis.title.y = element_text(size = 12, color = "#545252"),
       panel.border = element_blank(),
-      axis.line.x = element_line(color = "black"), axis.line.y = element_line(color = "black"),
+      axis.line.x = element_line(color = "#545252"), # Color updated
+      axis.line.y = element_line(color = "#545252"), # Color updated
       legend.position = "none",
-      plot.title = element_text(hjust = 0.5, face = "bold"),
-      plot.subtitle = element_text(hjust = 0.5), axis.text.x = element_text(angle = 45, hjust = 1),
-      panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+      plot.title = element_text(hjust = 0.5, face = "bold", color = "#545252"), # Color added
+      plot.subtitle = element_text(hjust = 0.5, color = "#545252"), # Color added
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      panel.grid.major = element_blank(), 
+      panel.grid.minor = element_blank(),
       plot.margin = margin(t = 20, r = 5, b = 5, l = 5, "pt")
     )
+  # --- END OF THEME UPDATE ---
   
   if (nrow(annotation_df) > 0) {
-    p <- p + geom_text(data = annotation_df, aes(x = condition, y = y_pos, label = label), inherit.aes = FALSE, size = star_size, vjust = star_vjust)
+    p <- p + geom_text(data = annotation_df, aes(x = condition, y = y_pos, label = label), 
+                       inherit.aes = FALSE, size = star_size, vjust = star_vjust, color = "#545252") # Color added
   }
   
   min_y <- min(plot_df$expression, na.rm = TRUE)
@@ -273,7 +284,7 @@ ui <- fluidPage(
       passwordInput("password", "Password:"),
       div(
         class = "text-center",
-        actionButton("login_button", "Log in", class = "btn-primary")
+        actionButton("login_button", "Log in")
       ),
       textOutput("login_message")
     )
@@ -317,11 +328,6 @@ ui <- fluidPage(
                     .navbar + .container-fluid {
                         border-top: none !important;
                     }
-
-                    /* --- CSS RULE FOR bslib SIDEBARS (MOFA TABS) --- */
-                    .bslib-sidebar-layout > aside {
-                        background-color: #F8F5F0 !important;
-                    }
                     
                     /* --- CSS RULES FOR ABOUT PAGE FONT SIZE --- */
                     #about-section p {
@@ -329,6 +335,15 @@ ui <- fluidPage(
                     }
                     #about-section h4 {
                         font-size: 22px !important; 
+                    }
+
+                    /* --- CORRECTED CSS RULE TO STYLE H3 TITLES --- */
+                    /* This targets h3 elements inside the main content area */
+                    .col-sm-9 h3 {
+                        font-size: 26px !important;
+                        font-weight: bold !important;
+                        color: #545252 !important;
+                        text-align: center;
                     }
 
                   "))
@@ -349,7 +364,7 @@ ui <- fluidPage(
                    hr(),
                    fluidRow(
                      column(10, offset = 1, align = "center",
-                            p("Welcome to the MAMOTH interactive data portal. This application provides tools to explore multi-omics datasets (transcriptome, proteome, and ubiquitome) related to MAGEL2 research. Use the navigation panels below or the tabs at the top to access the different viewers.", style = "font-size: 16px;")
+                            p("Welcome to the MAMOTH interactive data portal. This application provides tools to explore multi-omics datasets (transcriptome, proteome, and ubiquitome) from human induced pluripotent stem cell (hiPSC)-derived cortical neurons to investigate MAGEL2-associated diseases. Use the navigation panels below or the tabs at the top to access the different viewers.", style = "font-size: 16px;")
                      )
                    ),
                    br(),
@@ -367,22 +382,26 @@ ui <- fluidPage(
                    sidebarLayout(
                      sidebarPanel(
                        width = 3,
-                       h4("Select Gene"),
-                       selectizeInput("goi", "Gene Symbol:", choices = NULL, options = list(placeholder = 'Type or select gene...', maxOptions = 10000)),
+                       h4(""), 
+                       selectizeInput("goi", "Enter Gene Symbol", choices = NULL, options = list(placeholder = 'Type or select gene...', maxOptions = 10000)),
                        hr(),
-                       h4("Display Options"),
-                       checkboxInput("show_trans", "Show Transcriptome", value = TRUE),
-                       checkboxInput("show_prot", "Show Proteome", value = TRUE),
-                       checkboxInput("show_ubi", "Show Ubiquitome", value = TRUE),
+                       
+                       tags$label("Select Omics View", class = "control-label"),
+                       checkboxInput("show_trans", "Transcriptome", value = TRUE),
+                       checkboxInput("show_prot", "Proteome", value = TRUE),
+                       checkboxInput("show_ubi", "Ubiquitome", value = TRUE),
+                       
                        hr(),
                        helpText("Select a gene to view its expression. Use checkboxes to toggle data types. Significant stars refer to the adjusted p-value compared to WT")
                      ),
+                     
+                     # --- UI UPDATED HERE ---
                      mainPanel(
                        width = 9,
-                       conditionalPanel("input.show_trans == true", fluidRow(column(6, h5("Transcriptome - 8330", align="center"), plotOutput("plotRna8330", height = "350px")), column(6, h5("Transcriptome - MGH", align="center"), plotOutput("plotRnaMGH", height = "350px")))),
-                       conditionalPanel("input.show_prot == true", fluidRow(column(6, h5("Proteome - 8330", align="center"), plotOutput("plotProt8330", height = "350px")), column(6, h5("Proteome - MGH", align="center"), plotOutput("plotProtMGH", height = "350px")))),
-                       conditionalPanel("input.show_ubi == true", fluidRow(column(6, h5("Ubiquitome - 8330", align="center"), plotOutput("plotUbi8330", height = "350px")), column(6, h5("Ubiquitome - MGH", align="center"), plotOutput("plotUbiMGH", height = "350px"))))
+                       # A single spinner now wraps a single UI output
+                       withSpinner(uiOutput("gene_plots_ui"), type = 6, color = "#545252", size = 2)
                      )
+                     # --- END OF UPDATE ---
                    )
                  )
         ),
@@ -393,13 +412,11 @@ ui <- fluidPage(
                    tabPanel("Volcano Plot", 
                             fluidPage(
                               br(),
-                              # --- Reverted to classic sidebarLayout ---
                               sidebarLayout(
                                 sidebarPanel(
                                   width = 3,
-                                  h4("Controls"),
-                                  selectInput("volcano_group1", "Select Group 1:", choices = NULL),
-                                  selectInput("volcano_group2", "Select Group 2 (Contrast):", choices = NULL),
+                                  selectInput("volcano_group1", "Select Genotype 1:", choices = NULL),
+                                  selectInput("volcano_group2", "Select Genotype 2 (Contrast):", choices = NULL),
                                   hr(),
                                   checkboxGroupInput("volcano_omics", "Select Omics Layers:", choices = c("Transcriptome", "Proteome", "Ubiquitome"), selected = c("Transcriptome", "Proteome", "Ubiquitome")),
                                   hr(),
@@ -407,37 +424,59 @@ ui <- fluidPage(
                                   hr(),
                                   downloadButton("download_volcano_results", "Download Volcano Results (.xlsx)")
                                 ),
+                                
+                                # --- UI UPDATED HERE ---
                                 mainPanel(
                                   width = 9,
-                                  conditionalPanel("input.volcano_omics.includes('Transcriptome')", fluidRow(column(6, plotOutput("volcano_rna_8330")), column(6, plotOutput("volcano_rna_MGH")))),
-                                  conditionalPanel("input.volcano_omics.includes('Proteome')", fluidRow(column(6, plotOutput("volcano_prot_8330")), column(6, plotOutput("volcano_prot_MGH")))),
-                                  conditionalPanel("input.volcano_omics.includes('Ubiquitome')", fluidRow(column(6, plotOutput("volcano_ubi_8330")), column(6, plotOutput("volcano_ubi_MGH"))))
+                                  # A single spinner now wraps a single UI output
+                                  withSpinner(uiOutput("volcano_plots_ui"), type = 6, color = "#545252", size = 2)
                                 )
                               )
                             )
                    ),
-                   tabPanel("Gene Ontology Enrichment",
+                   tabPanel("Enrichment Analysis",
                             fluidPage(
                               br(),
-                              # --- Reverted to classic sidebarLayout ---
                               sidebarLayout(
                                 sidebarPanel(
                                   width = 3,
-                                  h4("Analysis Controls"),
-                                  selectInput("go_omics_type", "Select Omics Layer:", choices = c("Transcriptome", "Proteome", "Ubiquitome")),
-                                  selectInput("go_ontology", "Select GO Ontology:", choices = c("Biological Process" = "BP", "Cellular Component" = "CC", "Molecular Function" = "MF")),
-                                  selectInput("go_group1", "Select Group 1:", choices = NULL),
-                                  selectInput("go_group2", "Select Group 2 (Contrast):", choices = NULL),
-                                  sliderInput("go_n_terms", "Number of Top Terms to Display:", min = 3, max = 20, value = 10, step = 1),
-                                  actionButton("go_run_analysis", "Run Analysis", icon = icon("rocket"), class = "btn-primary"),
+                                  h4(""),
+                                  selectInput("go_omics_type", "Select Omics Layer:", 
+                                              choices = c("Transcriptome", "Proteome", "Ubiquitome")),
+                                  
+                                  # --- UPDATED DROPDOWN ---
+                                  selectInput("go_database", "Select Database:",
+                                              choices = c("GO: Combined (All)" = "ALL",
+                                                          "GO: Biological Process" = "BP",
+                                                          "GO: Cellular Component" = "CC",
+                                                          "GO: Molecular Function" = "MF",
+                                                          "Reactome" = "REAC",
+                                                          "HPO (Human Phenotype)" = "HP",
+                                                          "TF (MSigDB C3)" = "TF",
+                                                          "miRNA (miRTarBase)" = "MIRNA",
+                                                          "Cell Types (MSigDB C8)" = "C8"),
+                                              selected = "BP"),
+                                  
+                                  selectInput("go_background_select", "Select Genetic Background:",
+                                              choices = c("Overlapping Genes (Both)" = "both",
+                                                          "8330 Background" = "8330",
+                                                          "MGH Background" = "MGH")),
+                                  selectInput("go_group1", "Select Genotype 1:", choices = NULL),
+                                  selectInput("go_group2", "Select Genotype 2 (Contrast):", choices = NULL),
+                                  sliderInput("go_n_terms", "Number of Top Terms to Display:", 
+                                              min = 10, max = 100, value = 10, step = 10),
+                                  actionButton("go_run_analysis", "Run Analysis", icon = icon("rocket")),
                                   hr(),
-                                  helpText("This tool finds genes significantly changed in both backgrounds and performs GO enrichment."),
+                                  helpText("Select an omics layer, database, and comparison to run enrichment analysis. Running the enrichment may take a moment."),
                                   hr(),
-                                  downloadButton("download_go_results", "Download GO Results (.xlsx)")
+                                  downloadButton("download_go_results", "Download Enrichment Results (.xlsx)")
                                 ),
                                 mainPanel(
                                   width = 9,
-                                  plotOutput("go_plot", height = "700px")
+                                  fluidRow(
+                                    column(6, withSpinner(uiOutput("go_plot_down_ui"), type = 6, color = "#545252", size = 2)),
+                                    column(6, withSpinner(uiOutput("go_plot_up_ui"), type = 6, color = "#545252", size = 2))
+                                  )
                                 )
                               )
                             )
@@ -450,12 +489,13 @@ ui <- fluidPage(
                    type = "tabs",
                    tabPanel("Overview",
                             fluidPage(
-                              titlePanel("Overview of trained Multi-Omics Factor Analysis (MOFA) Model"),
-                              h3("Factor Overview"),
-                              plotOutput("overview_factor_plot", height="800px"),
+                              br(), # Added for spacing
+                              h3("Overview of trained Multi-Omics Factor Analysis (MOFA) Model", align = "center"),
+                              
+                              withSpinner(plotOutput("overview_factor_plot", height="800px"), type = 6, color = "#545252", size = 2),
                               hr(),
-                              h3("Total Variance Explained"),
-                              plotOutput("plot_variance_group_total")
+                              h3("Total Variance Explained", align = "center"), # Also styled this title
+                              withSpinner(plotOutput("plot_variance_group_total"), type = 6, color = "#545252", size = 2)
                             )
                    ),
                    tabPanel("Factor Exploration",
@@ -463,17 +503,22 @@ ui <- fluidPage(
                               br(), # Added for spacing
                               sidebarLayout(
                                 sidebarPanel(
-                                  h4("Factor Plot Options"),
                                   checkboxGroupInput("factors_to_plot", "Select Factors to Plot:", choices = 1:N_FACTORS, selected = 1:5, inline = TRUE),
-                                  selectInput("factors_color_by", "Color Samples By:", choices = c("Background", "Mutation"), selected = "Background"),
+                                  
+                                  # --- CHOICES RENAMED HERE ---
+                                  selectInput("factors_color_by", "Color Samples By:",
+                                              choices = c("Genetic Background" = "Background", 
+                                                          "Genotype" = "Mutation"),
+                                              selected = "Background"),
+                                  
                                   helpText("Select at least two factors to generate plots.")
                                 ),
                                 mainPanel(
                                   h3("Factor Scatter Plot Matrix"),
-                                  plotOutput("factor_plot_matrix", height = "600px"),
+                                  withSpinner(plotOutput("factor_plot_matrix", height = "600px"), type = 6, color = "#545252", size = 2),
                                   hr(),
                                   h3("Factor Correlations"),
-                                  plotOutput("factor_correlation_heatmap")
+                                  withSpinner(plotOutput("factor_correlation_heatmap"), type = 6, color = "#545252", size = 2)
                                 )
                               )
                             )
@@ -482,32 +527,29 @@ ui <- fluidPage(
                             fluidPage(
                               br(), # Added for spacing
                               sidebarLayout(
-                                sidebarPanel(h4("Weight Plot Options"), selectInput("weights_view", "Select Omics View:", choices = view_choices), selectInput("weights_factor", "Select Factor:", choices = 1:N_FACTORS, selected = 1), sliderInput("weights_nfeatures", "Number of Top Features:", min = 5, max = 250, value = 10, step = 1)),
-                                mainPanel(h3("Top Feature Weights"), uiOutput("plot_top_weights_selected_ui"))
+                                sidebarPanel(selectInput("weights_view", "Select Omics View:", choices = gsea_view_choices), selectInput("weights_factor", "Select Factor:", choices = 1:N_FACTORS, selected = 1), sliderInput("weights_nfeatures", "Number of Top Features:", min = 5, max = 250, value = 10, step = 1)),
+                                mainPanel(withSpinner(uiOutput("plot_top_weights_selected_ui"), type = 6, color = "#545252", size = 2))
                               )
                             )
                    ),
                    tabPanel("Data Heatmaps",
                             fluidPage(
                               br(), # Added for spacing
-                              # --- Reverted to classic sidebarLayout ---
                               sidebarLayout(
                                 sidebarPanel(
                                   width = 3,
-                                  h4("Heatmap Options"),
-                                  selectInput("heatmap_view", "Select Omics View:", choices = view_choices),
+                                  selectInput("heatmap_view", "Select Omics View:", choices = gsea_view_choices),
                                   selectInput("heatmap_factor", "Select Factor:", choices = 1:N_FACTORS, selected = 1),
                                   sliderInput("heatmap_nfeatures", "Number of Top Features:", min = 10, max = 100, value = 25, step = 5),
-                                  checkboxInput("heatmap_cluster_rows", "Cluster Rows (Features)", value = TRUE),
-                                  checkboxInput("heatmap_cluster_cols", "Cluster Columns (Samples)", value = TRUE),
+                                  
+                                  # --- CLUSTERING CHECKBOXES REMOVED ---
+                                  
                                   checkboxInput("heatmap_show_rownames", "Show Feature Names", value = TRUE),
-                                  checkboxInput("heatmap_show_colnames", "Show Sample Names", value = TRUE),
-                                  selectInput("heatmap_scale", "Scale Data:", choices = c("Row" = "row", "Column" = "column", "None" = "none"), selected = "row")
+                                  checkboxInput("heatmap_show_colnames", "Show Sample Names", value = TRUE)
                                 ),
                                 mainPanel(
                                   width = 9,
-                                  h3("Heatmap of Top Features for Selected Factor"), 
-                                  uiOutput("plot_data_heatmap_selected_ui")
+                                  withSpinner(uiOutput("plot_data_heatmap_selected_ui"), type = 6, color = "#545252", size = 2)
                                 )
                               )
                             )
@@ -515,32 +557,32 @@ ui <- fluidPage(
                    tabPanel("GSEA Enrichment",
                             fluidPage(
                               br(), # Added for spacing
-                              # --- Reverted to classic sidebarLayout ---
                               sidebarLayout(
                                 sidebarPanel(
                                   width = 3,
-                                  h4("GSEA Options (Live Analysis)"),
                                   selectInput("gsea_view", "Select Omics View:", choices = gsea_view_choices),
                                   selectInput("gsea_factor", "Select Factor:", choices = 1:N_FACTORS, selected = 1),
                                   selectInput("gsea_database", "Select Gene Set Database:",
                                               choices = c("Reactome" = "REAC", "Gene Ontology (BP)" = "GO:BP", "Gene Ontology (MF)" = "GO:MF", "Gene Ontology (CC)" = "GO:CC", "Human Phenotype Ontology" = "HP", "MicroRNAs (miRTarBase)" = "MIRNA", "Transcription Factors (TRANSFAC)" = "TF"),
                                               selected = "REAC"),
-                                  sliderInput("gsea_n_pathways", "Number of Top Pathways:", min = 5, max = 30, value = 15, step = 1),
+                                  sliderInput("gsea_n_pathways", "Number of Top Pathways:", min = 10, max = 100, value = 10, step = 10),
                                   hr(),
                                   actionButton("run_gsea", "Run Analysis", icon = icon("rocket")),
+                                  hr(),
                                   helpText("Click 'Run Analysis' to fetch results from g:Profiler. This may take a moment."),
                                   hr(),
                                   downloadButton("download_gsea_results", "Download GSEA Results (.xlsx)")
                                 ),
                                 mainPanel(
                                   width = 9,
-                                  h3("Live Gene Set Enrichment Analysis (GSEA) using g:Profiler"),
-                                  plotOutput("gsea_combined_plot", height = "600px")
+
+                                  # --- UI UPDATED HERE ---
+                                  withSpinner(uiOutput("gsea_combined_plot_ui"), type = 6, color = "#545252", size = 2)
                                 )
                               )
                             )
                    )
-                 )
+                   )
         ),
         
         tabPanel("About",
@@ -637,6 +679,52 @@ server <- function(input, output, session) {
                   plot_color=my_color_MGH, data_source_label="Transcriptome", master_order=master_condition_order, star_size=5, star_vjust=-0.2)
   })
   
+  
+  output$gene_plots_ui <- renderUI({
+    tagList(
+      conditionalPanel("input.show_trans == true", 
+                       fluidRow(
+                         column(6, h4("Transcriptome - 8330", align="center"), plotOutput("plotRna8330", height = "350px")), 
+                         column(6, h4("Transcriptome - MGH", align="center"), plotOutput("plotRnaMGH", height = "350px"))
+                       )),
+      conditionalPanel("input.show_prot == true", 
+                       fluidRow(
+                         column(6, h4("Proteome - 8330", align="center"), plotOutput("plotProt8330", height = "350px")), 
+                         column(6, h4("Proteome - MGH", align="center"), plotOutput("plotProtMGH", height = "350px"))
+                       )),
+      conditionalPanel("input.show_ubi == true", 
+                       fluidRow(
+                         column(6, h4("Ubiquitome - 8330", align="center"), plotOutput("plotUbi8330", height = "350px")), 
+                         column(6, h4("Ubiquitome - MGH", align="center"), plotOutput("plotUbiMGH", height = "350px"))
+                       ))
+    )
+  })
+  
+  # --- ADD THIS NEW BLOCK TO YOUR SERVER ---
+  
+  output$volcano_plots_ui <- renderUI({
+    # This tagList contains all the conditional panels that were
+    # previously in the UI. The spinner will now watch this
+    # entire block.
+    tagList(
+      conditionalPanel("input.volcano_omics.includes('Transcriptome')", 
+                       fluidRow(
+                         column(6, plotOutput("volcano_rna_8330")), 
+                         column(6, plotOutput("volcano_rna_MGH"))
+                       )),
+      conditionalPanel("input.volcano_omics.includes('Proteome')", 
+                       fluidRow(
+                         column(6, plotOutput("volcano_prot_8330")), 
+                         column(6, plotOutput("volcano_prot_MGH"))
+                       )),
+      conditionalPanel("input.volcano_omics.includes('Ubiquitome')", 
+                       fluidRow(
+                         column(6, plotOutput("volcano_ubi_8330")), 
+                         column(6, plotOutput("volcano_ubi_MGH"))
+                       ))
+    )
+  })
+  
   # --- Server Logic for Volcano Plots ---
   observe({
     req(data_loaded_flag, !is.null(available_conditions))
@@ -703,15 +791,27 @@ server <- function(input, output, session) {
   output$volcano_rna_MGH   <- renderPlot({ create_volcano_plot(volcano_data()$rna_MGH,   "Transcriptome - MGH") })
   
   # --- Server Logic for GO Enrichment ---
+  # --- Server Logic for GO Enrichment ---
   observe({
-    req(data_loaded_flag); choices <- available_conditions
-    updateSelectInput(session, "go_group1", choices = choices, selected = choices[1])
-    updateSelectInput(session, "go_group2", choices = choices, selected = choices[2])
+    req(data_loaded_flag, !is.null(available_conditions))
+    choices <- available_conditions
+    
+    # --- DEFAULTS UPDATED HERE ---
+    selected_g1 <- if ("DupC" %in% choices) "DupC" else choices[1]
+    selected_g2 <- if ("WT" %in% choices) "WT" else if (length(choices) > 1) choices[2] else choices[1]
+    
+    updateSelectInput(session, "go_group1", choices = choices, selected = selected_g1)
+    updateSelectInput(session, "go_group2", choices = choices, selected = selected_g2)
   })
   go_results <- eventReactive(input$go_run_analysis, {
     req(input$go_group1 != input$go_group2)
-    withProgress(message = 'Running GO Analysis...', value = 0, {
+    
+    withProgress(message = 'Running Enrichment Analysis...', value = 0, {
+      
       g1 <- input$go_group1; g2 <- input$go_group2; omics <- input$go_omics_type
+      bg_select <- input$go_background_select; db_select <- input$go_database
+      
+      # --- 1. Get Gene Lists ---
       incProgress(0.1, detail = paste("Fetching", tolower(omics), "data"))
       if (omics == "Transcriptome") {
         get_deg_df <- function(deg_list, g1, g2) {
@@ -734,46 +834,237 @@ server <- function(input, output, session) {
         } else { df_8330 <- get_se_df(Ubi_dep_8330, g1, g2); df_mgh <- get_se_df(Ubi_dep_MGH, g1, g2) }
       }
       validate(need(!is.null(df_8330) && !is.null(df_mgh), "This comparison is not available."))
-      incProgress(0.3, detail = "Finding overlapping genes")
+      
+      incProgress(0.2, detail = "Finding significant genes")
       sig_up_8330 <- df_8330 %>% filter(padj < 0.05, logFC > 0) %>% pull(name)
       sig_down_8330 <- df_8330 %>% filter(padj < 0.05, logFC < 0) %>% pull(name)
       sig_up_mgh <- df_mgh %>% filter(padj < 0.05, logFC > 0) %>% pull(name)
       sig_down_mgh <- df_mgh %>% filter(padj < 0.05, logFC < 0) %>% pull(name)
-      overlap_up <- intersect(sig_up_8330, sig_up_mgh)
-      overlap_down <- intersect(sig_down_8330, sig_down_mgh)
-      run_go <- function(gene_list, progress_msg, progress_val) {
-        incProgress(progress_val, detail = progress_msg)
+      
+      if (bg_select == "both") {
+        final_up_list <- intersect(sig_up_8330, sig_up_mgh)
+        final_down_list <- intersect(sig_down_8330, sig_down_mgh)
+      } else if (bg_select == "8330") {
+        final_up_list <- sig_up_8330
+        final_down_list <- sig_down_8330
+      } else if (bg_select == "MGH") {
+        final_up_list <- sig_up_mgh
+        final_down_list <- sig_down_mgh
+      }
+      
+      # --- 2. Define Analysis Functions ---
+      
+      # UPDATED: This function now takes the ontology (BP, CC, MF, or ALL) as an argument
+      run_go_analysis <- function(gene_list, ont_selection) {
         if (length(gene_list) == 0) return(NULL)
         entrez_ids <- bitr(gene_list, fromType = "SYMBOL", toType = "ENTREZID", OrgDb = org.Hs.eg.db)$ENTREZID
         if (length(entrez_ids) == 0) return(NULL)
-        enrichGO(gene = entrez_ids, OrgDb = org.Hs.eg.db, ont = input$go_ontology, pAdjustMethod = "BH", readable = TRUE)
+        
+        universe_ids <- NULL
+        if (omics == "Proteome" || omics == "Ubiquitome" || (omics == "Transcriptome" && bg_select == "MGH")) {
+          if (omics == "Transcriptome") all_genes <- rownames(DEG_list_MGH[[1]])
+          if (omics == "Proteome") all_genes <- rowData(dep_MGH)$name
+          if (omics == "Ubiquitome") all_genes <- rowData(Ubi_dep_MGH)$name
+          universe_ids <- bitr(all_genes, fromType="SYMBOL", toType="ENTREZID", OrgDb="org.Hs.eg.db")$ENTREZID
+        } 
+        
+        enrichGO(gene = entrez_ids, universe = universe_ids, OrgDb = org.Hs.eg.db, 
+                 ont = ont_selection, # Use the selection from the UI
+                 pAdjustMethod = "BH", qvalueCutoff = 0.05, readable = TRUE)
       }
-      go_up <- run_go(overlap_up, "Analyzing upregulated genes", 0.2)
-      go_down <- run_go(overlap_down, "Analyzing downregulated genes", 0.2)
-      incProgress(0.2, detail = "Finalizing")
+      
+      run_gost_analysis <- function(gene_list, database) {
+        if (length(gene_list) < 3) return(NULL)
+        gost(query = gene_list, organism = "hsapiens", sources = database, user_threshold = 0.05, correction_method = "fdr")$result
+      }
+      
+      run_enricher_analysis <- function(gene_list, category) {
+        if (length(gene_list) == 0) return(NULL)
+        msigdb_cat <- if(category == "TF") "C3" else "C8"
+        db <- msigdbr(species = "Homo sapiens", category = msigdb_cat)
+        if (category == "TF") {
+          db <- db %>% dplyr::filter(str_starts(gs_subcat, "TFT"))
+        }
+        term2gene <- db %>% dplyr::select(gs_name, gene_symbol) %>% as.data.frame()
+        enricher(gene = gene_list, TERM2GENE = term2gene, pAdjustMethod = "BH", pvalueCutoff = 0.05)
+      }
+      
+      # --- 3. Execute Selected Analysis ---
+      incProgress(0.4, detail = "Running enrichment...")
+      
+      # UPDATED: This block now handles the separate GO categories
+      if (db_select %in% c("ALL", "BP", "CC", "MF")) {
+        go_up <- run_go_analysis(final_up_list, db_select)
+        go_down <- run_go_analysis(final_down_list, db_select)
+      } else if (db_select %in% c("HP", "REAC", "MIRNA")) {
+        go_up <- run_gost_analysis(final_up_list, db_select)
+        go_down <- run_gost_analysis(final_down_list, db_select)
+      } else if (db_select == "TF") {
+        go_up <- run_enricher_analysis(final_up_list, "TF")
+        go_down <- run_enricher_analysis(final_down_list, "TF")
+      } else if (db_select == "C8") {
+        go_up <- run_enricher_analysis(final_up_list, "C8")
+        go_down <- run_enricher_analysis(final_down_list, "C8")
+      }
+      
+      incProgress(0.3, detail = "Finalizing")
       list(upregulated = go_up, downregulated = go_down)
     })
   })
-  output$go_plot <- renderPlot({
+  # --- This entire block REPLACES the old "output$go_plot" ---
+  
+  # 1. New plot output for UPREGULATED terms
+  # --- This entire block REPLACES the old "output$go_plot_up" ---
+  
+  # 1. New plot output for UPREGULATED terms (now in Red)
+  # --- This entire block REPLACES the old "output$go_plot_combined" ---
+  
+  # --- Helper function for GO plots (to avoid repeating code) ---
+  # --- Helper function for GO plots (to avoid repeating code) ---
+  # --- Helper function for GO plots (AESTHETICS UPDATED) ---
+  # --- Helper function for GO/Enrichment plots ---
+  # --- Helper function for GO/Enrichment plots ---
+  # --- Helper function for GO/Enrichment plots ---
+  # --- Helper function for GO/Enrichment plots ---
+  # --- Helper function for GO/Enrichment plots ---
+  create_go_barplot <- function(results_df, direction_label, global_plot_limit) {
+    
+    color_palette <- if (direction_label == "Overlapping Downregulation") "Blues" else "Reds"
+    
+    if (is(results_df, "enrichResult")) {
+      results_df <- as.data.frame(results_df@result)
+    } else {
+      results_df <- as.data.frame(results_df) # Assumes gost result
+    }
+    
+    if (is.null(results_df) || nrow(results_df) == 0) { 
+      return(ggplot() + 
+               labs(title = direction_label, subtitle = "No significant terms found") + 
+               theme_void() + 
+               theme(plot.title = element_text(hjust=0.5, face="bold", color="#545252"), 
+                     plot.subtitle = element_text(hjust=0.5, color="#545252"))) 
+    }
+    
+    if ("p.adjust" %in% colnames(results_df)) {
+      plot_data <- results_df %>% 
+        mutate(NegLog10Padj = -log10(p.adjust)) %>% 
+        slice_max(order_by = NegLog10Padj, n = input$go_n_terms) %>% 
+        mutate(Term_Wrapped = fct_reorder(str_wrap(gsub("_", " ", Description), 30), NegLog10Padj))
+    } else {
+      plot_data <- results_df %>% 
+        mutate(NegLog10Padj = -log10(p_value)) %>% 
+        slice_max(order_by = NegLog10Padj, n = input$go_n_terms) %>% 
+        mutate(Term_Wrapped = fct_reorder(str_wrap(gsub("_", " ", term_name), 30), NegLog10Padj))
+    }
+    
+    ggplot(plot_data, aes(x = Term_Wrapped, y = NegLog10Padj, fill = NegLog10Padj)) +
+      geom_col(width = 0.8) + # Keep the bar width relative but full
+      coord_flip() +
+      scale_fill_distiller(palette = color_palette, direction = 1, limits = c(0, global_plot_limit)) +
+      scale_y_continuous(limits = c(0, global_plot_limit), expand = c(0, 0.1)) +
+      labs(title = direction_label, x = NULL, y = expression(-log10(p.adj))) +
+      theme_minimal(base_size = 18) + 
+      theme(
+        text = element_text(color = "#545252"),
+        # --- TEXT OVERLAP FIX ---
+        axis.text.y = element_text(color = "#545252", lineheight = 0.8), # Adjust line height
+        axis.text.x = element_text(color = "#545252"),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        plot.title = element_text(hjust = 0.5, face = "bold", color = "#545252"), 
+        legend.position = "none"
+      )
+  }
+  
+  
+  
+  # --- Render UI for DOWNREGULATED plot (for dynamic height) ---
+  output$go_plot_down_ui <- renderUI({
+    req(input$go_n_terms)
+    
+    # --- NEW HEIGHT CALCULATION ---
+    # 150px base + 45px for each term. This gives ample space.
+    plot_height <- 150 + (input$go_n_terms * 45)
+    
+    withSpinner(plotOutput("go_plot_down", height = paste0(plot_height, "px")), type = 6, color = "#545252", size = 2)
+  })
+  
+  # --- Render the DOWNREGULATED (Blue) plot ---
+  output$go_plot_down <- renderPlot({
     results <- go_results()
-    validate(need(!is.null(results), "Click 'Run Analysis' to generate results."), need(!is.null(results$upregulated) || !is.null(results$downregulated), "No enrichment results could be generated."))
+    validate(need(!is.null(results), "Click 'Run Analysis' to generate results."), 
+             need(!is.null(results$downregulated), "No overlapping downregulated genes found."))
+    
     all_results_df <- bind_rows(as.data.frame(results$upregulated), as.data.frame(results$downregulated))
     global_plot_limit <- if (nrow(all_results_df) > 0) { ceiling(max(-log10(all_results_df$p.adjust), na.rm = TRUE)) } else { 10 }
-    create_go_barplot <- function(results_df, direction_label) {
-      if (is.null(results_df) || nrow(as.data.frame(results_df)) == 0) { return(ggplot() + labs(title = direction_label, subtitle = "No significant terms found") + theme_void() + theme(plot.title = element_text(hjust=0.5), plot.subtitle = element_text(hjust=0.5))) }
-      plot_data <- as.data.frame(results_df) %>% mutate(NegLog10Padj = -log10(p.adjust)) %>% slice_max(order_by = NegLog10Padj, n = input$go_n_terms) %>% mutate(Description_wrapped = fct_reorder(str_wrap(Description, 50), NegLog10Padj))
-      color_palette <- if (direction_label == "Overlapping Upregulation") "Blues" else "Reds"
-      ggplot(plot_data, aes(x = Description_wrapped, y = NegLog10Padj, fill = NegLog10Padj)) +
-        geom_col() + coord_flip() +
-        scale_fill_distiller(palette = color_palette, direction = 1, limits = c(0, global_plot_limit)) +
-        scale_y_continuous(limits = c(0, global_plot_limit), expand = c(0, 0.1)) +
-        labs(title = direction_label, x = NULL, y = bquote(-log[10]~'(Adjusted P-value)')) +
-        theme_bw(base_size = 14) +
-        theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.title = element_text(hjust = 0.5, face = "bold"), legend.position = "none")
-    }
-    p_up <- create_go_barplot(results$upregulated, "Overlapping Upregulation")
-    p_down <- create_go_barplot(results$downregulated, "Overlapping Downregulation")
-    p_up + p_down
+    
+    create_go_barplot(results$downregulated, "Overlapping Downregulation", global_plot_limit)
+  })
+  
+  # --- Render UI for UPREGULATED plot (for dynamic height) ---
+  output$go_plot_up_ui <- renderUI({
+    req(input$go_n_terms)
+    
+    # --- NEW HEIGHT CALCULATION ---
+    # 150px base + 45px for each term
+    plot_height <- 150 + (input$go_n_terms * 45)
+    
+    plotOutput("go_plot_up", height = paste0(plot_height, "px"))
+  })
+  
+  # --- Render the UPREGULATED (Red) plot ---
+  output$go_plot_up <- renderPlot({
+    results <- go_results()
+    validate(need(!is.null(results), "Click 'Run Analysis' to generate results."), 
+             need(!is.null(results$upregulated), "No overlapping upregulated genes found."))
+    
+    all_results_df <- bind_rows(as.data.frame(results$upregulated), as.data.frame(results$downregulated))
+    global_plot_limit <- if (nrow(all_results_df) > 0) { ceiling(max(-log10(all_results_df$p.adjust), na.rm = TRUE)) } else { 10 }
+    
+    create_go_barplot(results$upregulated, "Overlapping Upregulation", global_plot_limit)
+  })
+  
+  # --- 1. Render the DOWNREGULATED (Blue) plot ---
+  # --- 1. Render the DOWNREGULATED (Blue) plot ---
+  output$go_plot_down <- renderPlot({
+    results <- go_results()
+    validate(need(!is.null(results), "Click 'Run Analysis' to generate results."), 
+             need(!is.null(results$downregulated), "No significant terms found for downregulated set."))
+    
+    # Handle different result types for global limit
+    df_up <- if(is(results$upregulated, "enrichResult")) as.data.frame(results$upregulated@result) else as.data.frame(results$upregulated)
+    df_down <- if(is(results$downregulated, "enrichResult")) as.data.frame(results$downregulated@result) else as.data.frame(results$downregulated)
+    
+    all_results_df <- bind_rows(df_up, df_down)
+    
+    # Handle different p-value column names
+    pval_col <- if ("p.adjust" %in% colnames(all_results_df)) "p.adjust" else "p_value"
+    
+    global_plot_limit <- if (nrow(all_results_df) > 0) { 
+      ceiling(max(-log10(all_results_df[[pval_col]]), na.rm = TRUE)) 
+    } else { 10 }
+    
+    create_go_barplot(results$downregulated, "Overlapping Downregulation", global_plot_limit)
+  })
+  
+  # --- 2. Render the UPREGULATED (Red) plot ---
+  output$go_plot_up <- renderPlot({
+    results <- go_results()
+    validate(need(!is.null(results), "Click 'Run Analysis' to generate results."), 
+             need(!is.null(results$upregulated), "No significant terms found for upregulated set."))
+    
+    df_up <- if(is(results$upregulated, "enrichResult")) as.data.frame(results$upregulated@result) else as.data.frame(results$upregulated)
+    df_down <- if(is(results$downregulated, "enrichResult")) as.data.frame(results$downregulated@result) else as.data.frame(results$downregulated)
+    
+    all_results_df <- bind_rows(df_up, df_down)
+    
+    pval_col <- if ("p.adjust" %in% colnames(all_results_df)) "p.adjust" else "p_value"
+    
+    global_plot_limit <- if (nrow(all_results_df) > 0) { 
+      ceiling(max(-log10(all_results_df[[pval_col]]), na.rm = TRUE)) 
+    } else { 10 }
+    
+    create_go_barplot(results$upregulated, "Overlapping Upregulation", global_plot_limit)
   })
   
   # --- Download Handler for Volcano Plot Results ---
@@ -801,22 +1092,42 @@ server <- function(input, output, session) {
   )
   
   # --- Download Handler for Gene Ontology Results ---
+  # --- Download Handler for Gene Ontology Results ---
   output$download_go_results <- downloadHandler(
     filename = function() {
-      req(input$go_group1, input$go_group2, input$go_omics_type, input$go_ontology)
-      paste0("GO_Enrichment_", input$go_omics_type, "_", input$go_ontology, "_", 
-             input$go_group1, "_vs_", input$go_group2, "_", Sys.Date(), ".xlsx")
+      req(input$go_group1, input$go_group2, input$go_omics_type, input$go_database, input$go_background_select)
+      
+      bg_label <- switch(input$go_background_select,
+                         "both" = "Overlapping",
+                         "8330" = "8330_Only",
+                         "MGH" = "MGH_Only")
+      
+      paste0("Enrichment_", input$go_omics_type, "_", input$go_database, "_", 
+             bg_label, "_", input$go_group1, "_vs_", input$go_group2, "_", Sys.Date(), ".xlsx")
     },
     content = function(file) {
       data_to_write <- go_results()
-      validate(need(!is.null(data_to_write), "Please run the GO analysis before downloading."))
+      validate(need(!is.null(data_to_write), "Please run the enrichment analysis before downloading."))
+      
+      # Helper to correctly extract data.frame from enrichResult or gost result
+      extract_df <- function(obj) {
+        if (is(obj, "enrichResult")) {
+          return(as.data.frame(obj@result))
+        } else if (is.data.frame(obj)) {
+          return(obj)
+        }
+        return(NULL)
+      }
+      
+      df_up <- extract_df(data_to_write$upregulated)
+      df_down <- extract_df(data_to_write$downregulated)
       
       sheets_list <- list()
-      if (!is.null(data_to_write$upregulated) && nrow(as.data.frame(data_to_write$upregulated)) > 0) {
-        sheets_list[["Overlapping_Upregulation"]] <- as.data.frame(data_to_write$upregulated)
+      if (!is.null(df_up) && nrow(df_up) > 0) {
+        sheets_list[["Upregulated_Enrichment"]] <- df_up
       }
-      if (!is.null(data_to_write$downregulated) && nrow(as.data.frame(data_to_write$downregulated)) > 0) {
-        sheets_list[["Overlapping_Downregulation"]] <- as.data.frame(data_to_write$downregulated)
+      if (!is.null(df_down) && nrow(df_down) > 0) {
+        sheets_list[["Downregulated_Enrichment"]] <- df_down
       }
       
       validate(need(length(sheets_list) > 0, "No enrichment results found to download."))
@@ -826,7 +1137,13 @@ server <- function(input, output, session) {
   )
   
   # --- SERVER LOGIC FOR MOFA BROWSER ---
-  base_gg_theme <- theme_minimal(base_size = 18) + theme(text = element_text(colour = font_color_dark), axis.text = element_text(colour = font_color_dark), plot.title = element_text(colour = font_color_dark), legend.text = element_text(colour = font_color_dark))
+  base_gg_theme <- theme_minimal(base_size = 18) + 
+    theme(
+      text = element_text(colour = font_color_dark), 
+      axis.text = element_text(colour = font_color_dark), 
+      plot.title = element_text(colour = font_color_dark), 
+      legend.text = element_text(colour = font_color_dark)
+    )
   
   output$overview_factor_plot <- renderPlot({
     req(mofa_data_loaded)
@@ -904,29 +1221,43 @@ server <- function(input, output, session) {
     metadata_df <- MOFA_out@samples_metadata %>%
       tibble::rownames_to_column("sample_rn") %>%
       dplyr::select(sample, !!sym(color_by_col))
-    
+      
     plot_df <- dplyr::left_join(factors_df, metadata_df, by = "sample")
+
+    # --- DEFINE COLORS AND WRAPPER FUNCTION HERE ---
     
+    # 1. Define the correct color palette first
+    my_colors <- if (color_by_col == "Background") {
+      c("8330" = "grey40", "MGH" = "grey80")
+    } else {
+      # Get the default ggplot colors for the 7 mutation types
+      gg_color_hue(n_distinct(plot_df[[color_by_col]]))
+    }
+
+    # 2. Create a simple wrapper for the correlation function to set the size
+    #    ggally_cor is designed to respect the aes(color=...) mapping
+    custom_cor <- function(data, mapping, ...) {
+      ggally_cor(data = data, mapping = mapping, size = 3, ...)
+    }
+    
+    # --- END NEW LOGIC ---
+
     p <- GGally::ggpairs(
       plot_df,
       columns = paste0("Factor", factors_to_plot),
       mapping = aes(color = .data[[color_by_col]]),
       
-      # --- CHANGE IS HERE ---
-      # Kept the default 'cor' function which respects color, 
-      # but set the text 'size' to 3 to prevent overlap.
-      upper = list(continuous = wrap("cor", size = 3)), 
+      # Use the new custom function
+      upper = list(continuous = custom_cor), 
       
       lower = list(continuous = wrap("points", size = 4, alpha = 0.6)),
       diag = list(continuous = custom_density)
     )
-    
-    # This logic correctly applies your grey colors only when "Background" is selected
-    if (color_by_col == "Background") {
-      p <- p + scale_color_manual(values = c("8330" = "grey40", "MGH" = "grey80")) +
-        scale_fill_manual(values = c("8330" = "grey40", "MGH" = "grey80"))
-    }
-    
+
+    # 3. Apply the correct color palette to all plot components
+    p <- p + scale_color_manual(values = my_colors) +
+             scale_fill_manual(values = my_colors)
+
     p <- p + theme_bw(base_size = 14) +
       theme(
         text = element_text(colour = font_color_dark),
@@ -937,7 +1268,7 @@ server <- function(input, output, session) {
         legend.text = element_text(size = 12, colour = font_color_dark),
         panel.grid = element_blank()
       )
-    
+      
     print(p)
   })
   
@@ -1000,22 +1331,118 @@ server <- function(input, output, session) {
     weights_df <- get_weights(MOFA_out, as.data.frame = TRUE, views = input$weights_view, factors = as.numeric(input$weights_factor))
     plot_data <- weights_df %>% slice_max(abs(value), n = input$weights_nfeatures) %>% mutate(feature_formatted = format_feature_names(feature), feature_ordered = fct_reorder(feature_formatted, value))
     max_abs_weight <- max(abs(plot_data$value), na.rm = TRUE)
+    
     ggplot(plot_data, aes(y = feature_ordered, x = value, fill = value)) +
-      geom_bar(stat = "identity") + scale_fill_gradientn(colors = heatmap_colors, limits = c(-max_abs_weight, max_abs_weight)) +
-      labs(title = paste("Top Features for Factor", input$weights_factor), x = "Weight", y = NULL, fill = "Weight") + base_gg_theme + theme(panel.grid.major.y = element_blank())
+      geom_bar(stat = "identity") + 
+      scale_fill_gradientn(colors = heatmap_colors, limits = c(-max_abs_weight, max_abs_weight)) +
+      labs(title = paste("Top Features for Factor", input$weights_factor), x = "Weight", y = NULL, fill = "Weight") +
+      
+      # --- AESTHETICS UPDATED HERE ---
+      base_gg_theme + # Apply the corrected base theme
+      theme(
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        # No manual color overrides are needed anymore
+        plot.title = element_text(hjust = 0.5, face = "bold")
+      )
   })
   
-  output$plot_data_heatmap_selected_ui <- renderUI({ req(input$heatmap_nfeatures); plotOutput("plot_data_heatmap_selected", height = paste0(400 + (input$heatmap_nfeatures * 15), "px")) })
+  output$plot_data_heatmap_selected_ui <- renderUI({ 
+    req(input$heatmap_nfeatures)
+    # 250px base + 15px for each feature
+    plot_height <- 250 + (input$heatmap_nfeatures * 15) 
+    plotOutput("plot_data_heatmap_selected", height = paste0(plot_height, "px"))
+  })
+  
   output$plot_data_heatmap_selected <- renderPlot({
     req(mofa_data_loaded, input$heatmap_view, input$heatmap_factor, input$heatmap_nfeatures)
-    weights_matrix <- get_weights(MOFA_out, views = input$heatmap_view)[[1]]; factor_weights <- weights_matrix[, as.numeric(input$heatmap_factor), drop = FALSE]
+    
+    # --- 1. Data Preparation (same as before) ---
+    weights_matrix <- get_weights(MOFA_out, views = input$heatmap_view)[[1]]
+    factor_weights <- weights_matrix[, as.numeric(input$heatmap_factor), drop = FALSE]
     top_features_sorted <- factor_weights[order(abs(factor_weights[,1]), decreasing = TRUE), , drop = FALSE]
     features_to_plot <- head(rownames(top_features_sorted), n = input$heatmap_nfeatures)
-    data_matrix_list <- MOFA_out@data[[input$heatmap_view]]; full_data_matrix <- do.call(cbind, data_matrix_list)
-    data_matrix_subset <- full_data_matrix[features_to_plot, , drop = FALSE]
-    rownames(data_matrix_subset) <- format_feature_names(rownames(data_matrix_subset))
-    display_view_name <- view_labeller[input$heatmap_view]; title_text <- paste("Top", input$heatmap_nfeatures, display_view_name, "Features for Factor", input$heatmap_factor)
-    pheatmap::pheatmap(data_matrix_subset, main = title_text, color = heatmap_colors, border_color = NA, scale = "row", cluster_rows = input$heatmap_cluster_rows, cluster_cols = input$heatmap_cluster_cols, show_rownames = input$heatmap_show_rownames, show_colnames = input$heatmap_show_colnames, fontsize = 12, fontsize_row = 10, fontsize_col = 10, fontfamily = "sans")
+    
+    data_matrix_list <- MOFA_out@data[[input$heatmap_view]]
+    full_data_matrix <- do.call(cbind, data_matrix_list)
+    
+    features_in_data <- features_to_plot[features_to_plot %in% rownames(full_data_matrix)]
+    if(length(features_in_data) == 0) stop("No matching features found between weights and data.")
+    data_matrix_subset <- full_data_matrix[features_in_data, , drop = FALSE]
+    
+    # --- 2. Z-Score Calculation (same as before) ---
+    col_data <- as.data.frame(MOFA_out@samples_metadata)
+    mgh_cols <- col_data$sample[col_data$Background == "MGH"]
+    b8330_cols <- col_data$sample[col_data$Background == "8330"]
+    mgh_cols_present <- intersect(mgh_cols, colnames(data_matrix_subset))
+    b8330_cols_present <- intersect(b8330_cols, colnames(data_matrix_subset))
+    
+    mgh_matrix_unscaled <- data_matrix_subset[, mgh_cols_present, drop = FALSE]
+    b8330_matrix_unscaled <- data_matrix_subset[, b8330_cols_present, drop = FALSE]
+    
+    calculate_z_score <- function(mat) {
+      mat_scaled <- matrix(0, nrow = nrow(mat), ncol = ncol(mat), dimnames = dimnames(mat))
+      variances <- apply(mat, 1, var, na.rm=TRUE)
+      has_variance <- (variances > 1e-6) & !is.na(variances)
+      if(any(has_variance)) {
+        mat_subset <- mat[has_variance, , drop = FALSE] 
+        scaled_subset <- t(scale(t(mat_subset), center = TRUE, scale = TRUE))
+        mat_scaled[has_variance, ] <- scaled_subset
+      }
+      return(mat_scaled)
+    }
+    
+    z_mgh <- calculate_z_score(mgh_matrix_unscaled)
+    z_8330 <- calculate_z_score(b8330_matrix_unscaled)
+    z_score_matrix_combined <- cbind(z_mgh, z_8330)
+    z_score_matrix_final <- z_score_matrix_combined[, colnames(data_matrix_subset)] 
+    
+    z_score_matrix_final[z_score_matrix_final > 2] <- 2
+    z_score_matrix_final[z_score_matrix_final < -2] <- -2
+    
+    # --- 3. Convert to long data frame for ggplot2 ---
+    plot_data <- as.data.frame(z_score_matrix_final) %>%
+      rownames_to_column("Feature") %>%
+      pivot_longer(cols = -Feature, names_to = "Sample", values_to = "Z_Score") %>%
+      mutate(
+        # --- CHANGE IS HERE ---
+        # Apply the name formatting function to the Feature column
+        Feature = factor(format_feature_names(Feature), levels = rev(format_feature_names(features_in_data))), 
+        Sample = factor(Sample, levels = colnames(z_score_matrix_final)) 
+      )
+    
+    display_view_name <- view_labeller[input$heatmap_view]
+    title_text <- paste("Top", input$heatmap_nfeatures, display_view_name, "Features for Factor", input$heatmap_factor)
+    
+    # --- 4. Create ggplot2 Heatmap ---
+    p <- ggplot(plot_data, aes(x = Sample, y = Feature, fill = Z_Score)) +
+      geom_tile() +
+      scale_fill_gradientn(
+        colors = heatmap_colors, 
+        limits = c(-2, 2), 
+        name = "Z-Score"
+      ) +
+      labs(title = title_text, x = NULL, y = NULL) +
+      base_gg_theme + # Apply the consistent theme
+      theme(
+        panel.grid = element_blank(),
+        plot.title = element_text(hjust = 0.5, face = "bold")
+      )
+    
+    # --- 5. Apply Show/Hide Names Logic ---
+    if (input$heatmap_show_rownames) {
+      p <- p + theme(axis.text.y = element_text(size = 12))
+    } else {
+      p <- p + theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+    }
+    
+    if (input$heatmap_show_colnames) {
+      p <- p + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 10))
+    } else {
+      p <- p + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+    }
+    
+    print(p)
   })
   
   gsea_results_reactive <- eventReactive(input$run_gsea, {
@@ -1038,6 +1465,14 @@ server <- function(input, output, session) {
     })
   })
   
+  # --- Render UI for GSEA plot (for dynamic height) ---
+  output$gsea_combined_plot_ui <- renderUI({
+    req(input$gsea_n_pathways)
+    # 150px base + 45px for each term
+    plot_height <- 150 + (input$gsea_n_pathways * 45)
+    plotOutput("gsea_combined_plot", height = paste0(plot_height, "px"))
+  })
+  
   output$gsea_combined_plot <- renderPlot({
     req(mofa_data_loaded)
     results <- gsea_results_reactive()
@@ -1047,16 +1482,26 @@ server <- function(input, output, session) {
     
     create_gsea_plot_internal <- function(results_df, weight_sign) {
       if (is.null(results_df) || nrow(results_df) == 0) { return(ggplot() + labs(title = paste(weight_sign, "Weights Enrichment"), subtitle = "No significant terms found") + theme_void() + theme(plot.title = element_text(hjust=0.5), plot.subtitle = element_text(hjust=0.5))) }
-      plot_data <- results_df %>% mutate(NegLog10FDR = -log10(p_value)) %>% slice_max(order_by = NegLog10FDR, n = TOP_N_TERMS_PLOT) %>% mutate(term_name_ordered = fct_reorder(str_wrap(term_name, 50), NegLog10FDR))
+      
+      # --- UPDATED PLOT DATA (TEXT WRAPPING) ---
+      plot_data <- results_df %>% 
+        mutate(NegLog10FDR = -log10(p_value)) %>% 
+        slice_max(order_by = NegLog10FDR, n = TOP_N_TERMS_PLOT) %>% 
+        mutate(term_name_ordered = fct_reorder(str_wrap(gsub("_", " ", term_name), 30), NegLog10FDR)) # Wrap at 30 chars
+      
       color_palette <- if (weight_sign == "Positive") "Blues" else "Reds"
       
       p <- ggplot(plot_data, aes(x = term_name_ordered, y = NegLog10FDR, fill = NegLog10FDR)) +
-        geom_bar(stat = "identity") + coord_flip() + scale_fill_distiller(palette = color_palette, direction = 1, limits = c(0, global_plot_limit)) + scale_y_continuous(limits = c(0, global_plot_limit), expand = c(0, 0.1)) +
+        
+        # --- UPDATED BAR WIDTH ---
+        geom_bar(stat = "identity", width = 0.8) + # Set bar width
+        
+        coord_flip() + scale_fill_distiller(palette = color_palette, direction = 1, limits = c(0, global_plot_limit)) + scale_y_continuous(limits = c(0, global_plot_limit), expand = c(0, 0.1)) +
         labs(
-          title = paste(weight_sign, "Weights Enrichment"),
+          title = paste(weight_sign, "Weights"),
           subtitle = paste("Factor", TARGET_FACTOR, "|", names(which(c("Reactome" = "REAC", "GO (BP)" = "GO:BP", "GO (MF)" = "GO:MF", "GO (CC)" = "GO:CC", "HPO" = "HP", "miRNA" = "MIRNA", "TF" = "TF") == SOURCE_GENESET))),
           x = NULL,
-          y = expression(-log10(p.adj)) # *** LABEL UPDATED HERE ***
+          y = expression(-log10(p.adj))
         ) +
         base_gg_theme + 
         theme(
@@ -1064,7 +1509,10 @@ server <- function(input, output, session) {
           panel.grid.minor = element_blank(),
           plot.title = element_text(hjust = 0.5, face = "bold"),
           plot.subtitle = element_text(hjust = 0.5),
-          legend.position = "none" # *** LEGEND REMOVED HERE ***
+          legend.position = "none",
+          
+          # --- UPDATED TEXT SPACING ---
+          axis.text.y = element_text(lineheight = 0.8) # Adjust line height for wrapped text
         )
       p
     }
@@ -1072,7 +1520,7 @@ server <- function(input, output, session) {
     p_pos <- create_gsea_plot_internal(results$positive, "Positive"); p_neg <- create_gsea_plot_internal(results$negative, "Negative")
     title <- ggdraw() + draw_label(paste(view_display_name, "View - GSEA Results"), fontface = 'bold', x = 0.5, hjust = 0.5, size = 16, colour = font_color_dark)
     combined_plots <- plot_grid(p_pos, p_neg, ncol = 2, align = 'v')
-    plot_grid(title, combined_plots, ncol = 1, rel_heights = c(0.1, 1))
+    plot_grid(combined_plots, ncol = 1, rel_heights = c(0.1, 1))
   })
   
   # --- Download Handler for GSEA Results ---
